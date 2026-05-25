@@ -1,131 +1,339 @@
-package com.github.yournamehere
+package com.aliucord.plugins
 
-import android.content.Context
-import com.aliucord.Utils
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView
 import com.aliucord.annotations.AliucordPlugin
-import com.aliucord.api.CommandsAPI
-import com.aliucord.entities.MessageEmbedBuilder
 import com.aliucord.entities.Plugin
-import com.aliucord.patcher.*
-import com.aliucord.wrappers.embeds.MessageEmbedWrapper.Companion.title
-import com.discord.api.commands.ApplicationCommandType
-import com.discord.models.user.CoreUser
-import com.discord.stores.StoreUserTyping
+import com.aliucord.patcher.after
+import com.facebook.drawee.view.SimpleDraweeView
+
+// Chat & messages
 import com.discord.widgets.chat.list.adapter.WidgetChatListAdapterItemMessage
-import com.discord.widgets.chat.list.entries.ChatListEntry
-import com.discord.widgets.chat.list.entries.MessageEntry
+import com.discord.widgets.chat.list.adapter.WidgetChatListAdapterItemMember
+import com.discord.widgets.chat.list.adapter.WidgetChatListAdapterItemReaction
+import com.discord.widgets.chat.list.adapter.WidgetChatListAdapterItemEphemeralMessage
+import com.discord.widgets.chat.list.adapter.WidgetChatListAdapterItemTyping
 
-// Aliucord Plugin annotation. Must be present on the main class of your plugin
-// Plugin class. Must extend Plugin and override start and stop
-// Learn more: https://github.com/Aliucord/documentation/blob/main/plugin-dev/1_introduction.md#basic-plugin-structure
-@AliucordPlugin(
-    requiresRestart = false, // Whether your plugin requires a restart after being installed/updated
-)
-@Suppress("unused")
-class MyFirstKotlinPlugin : Plugin() {
-    override fun start(context: Context) {
-        // Register a command with the name hello and description "My first command!" and no arguments.
-        // Learn more: https://github.com/Aliucord/documentation/blob/main/plugin-dev/2_commands.md
-        commands.registerCommand("hello", "My first command!") {
-            // Just return a command result with hello world as the content
-            CommandsAPI.CommandResult(
-                "Hello World!",
-                null, // List of embeds
-                false, // Whether to send visible for everyone
-            )
-        }
+// Reactions sheet
+import com.discord.widgets.reactions.WidgetReactionsList
+import com.discord.widgets.reactions.ReactionsBottomSheet
 
-        // A bit more advanced command with arguments
-        commands.registerCommand(
-            "hellowitharguments",
-            "Hello World but with arguments!",
-            listOf(
-                Utils.createCommandOption(
-                    ApplicationCommandType.STRING,
-                    "name",
-                    "Person to say hello to",
-                ),
-                Utils.createCommandOption(
-                    ApplicationCommandType.USER,
-                    "user",
-                    "User to say hello to",
-                ),
-            ),
-        ) { ctx ->
-            // Check if a user argument was passed
-            val username = if (ctx.containsArg("user")) {
-                ctx.getRequiredUser("user").username
-            } else {
-                // Returns either the argument value if present, or the defaultValue ("World" in this case)
-                ctx.getStringOrDefault("name", "World")
-            }
+// Home / header
+import com.discord.widgets.home.WidgetHomeHeaderManager
 
-            // Return the final result that will be displayed in chat as a response to the command
-            CommandsAPI.CommandResult("Hello $username!")
-        }
+// User & member profiles
+import com.discord.widgets.user.profile.UserProfileHeaderView
+import com.discord.widgets.user.usersheet.WidgetUserSheet
 
-        // Patch that adds an embed with message statistics to each message
-        // Patched method is WidgetChatListAdapterItemMessage.onConfigure(int type, ChatListEntry entry)
-        patcher.after<WidgetChatListAdapterItemMessage>(
-            "onConfigure", // Method name
-            // Refer to https://kotlinlang.org/docs/reflection.html#class-references
-            // and https://docs.oracle.com/javase/tutorial/reflect/class/classNew.html
-            Int::class.java, // int type
-            ChatListEntry::class.java, // ChatListEntry entry
-        ) { param ->
-            // see https://api.xposed.info/reference/de/robv/android/xposed/XC_MethodHook.MethodHookParam.html
-            // Obtain the second argument passed to the method, so the ChatListEntry
-            // Because this is a Message item, it will always be a MessageEntry, so cast it to that
-            val entry = param.args[1] as MessageEntry
-            val message = entry.message
+// Friends list
+import com.discord.widgets.friends.WidgetFriendsListAdapter
+import com.discord.widgets.friends.WidgetFriendsListItem
 
-            // You need to be careful when messing with messages, because they may be loading
-            // (user sent a message, and it is currently sending)
-            if (message.isLoading) return@after
+// DM list
+import com.discord.widgets.channels.privateChannels.PrivateChannelListItem
 
-            // Now add an embed with the statistics
+// Voice channel participants
+import com.discord.widgets.voice.fullscreen.WidgetVoiceFullscreenParticipant
+import com.discord.widgets.channels.list.WidgetChannelListItemVoiceUser
 
-            // This method may be called multiple times per message, e.g. if it is edited,
-            // so first remove existing embeds
-            message.embeds.removeAll {
-                // MessageEmbed.getTitle() is actually obfuscated, but Aliucord provides extensions for commonly used
-                // obfuscated Discord classes, so just import the MessageEmbed.title extension and boom goodbye obfuscation!
-                it.title == "Message Statistics"
-            }
+// Guild / server list
+import com.discord.widgets.guilds.list.WidgetGuildListItem
 
-            // Creating embeds is a pain, so Aliucord provides a convenient builder
-            MessageEmbedBuilder().run {
-                setTitle("Message Statistics")
-                addField("Length", "${message.content?.length ?: 0}", false)
-                addField("ID", message.id.toString(), false)
+// Search results
+import com.discord.widgets.search.WidgetSearchResultsAdapter
+import com.discord.widgets.search.WidgetSearchResultsListItem
 
-                message.embeds.add(build())
+// Mention / autocomplete
+import com.discord.widgets.chat.input.autocomplete.MentionSuggestionItem
+import com.discord.widgets.chat.input.autocomplete.WidgetChatInputAutocompleteAdapter
+
+// Threads
+import com.discord.widgets.threads.WidgetThreadListItem
+
+// Forum posts
+import com.discord.widgets.forums.WidgetForumPostListItem
+
+// Notifications
+import com.discord.widgets.notifications.WidgetNotificationListItem
+
+// Stage channel
+import com.discord.widgets.stage.StageParticipantListItem
+
+// Invite screen
+import com.discord.widgets.invite.WidgetInviteInviter
+
+// Audit log
+import com.discord.widgets.settings.guild.audit.WidgetAuditLogItem
+
+@AliucordPlugin
+class HideAvatars : Plugin() {
+
+    override fun start() {
+        tryPatch("WidgetChatListAdapterItemMessage") {
+            patcher.after<WidgetChatListAdapterItemMessage>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
             }
         }
 
-        // Patch that renames Juby to JoobJoob
-        patcher.before<CoreUser>("getUsername") { param ->
-            // see https://api.xposed.info/reference/de/robv/android/xposed/XC_MethodHook.MethodHookParam.html
-            // in before, after and instead patches, `this` refers to the instance of the class
-            // the patched method is on, so the CoreUser instance here
-            if (id == 925141667688878090) {
-                // setResult() in before patches skips original method invocation
-                param.result = "JoobJoob"
+        tryPatch("WidgetChatListAdapterItemEphemeralMessage") {
+            patcher.after<WidgetChatListAdapterItemEphemeralMessage>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
             }
         }
 
-        // Patch that hides your typing status by replacing the method and simply doing nothing
-        patcher.instead<StoreUserTyping>(
-            "setUserTyping",
-            Long::class.java, // java.lang.Long channelId
-        ) {
-            // Return null
-            null
+        tryPatch("WidgetChatListAdapterItemReaction") {
+            patcher.after<WidgetChatListAdapterItemReaction>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetChatListAdapterItemTyping") {
+            patcher.after<WidgetChatListAdapterItemTyping>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetThreadListItem") {
+            patcher.after<WidgetThreadListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetForumPostListItem") {
+            patcher.after<WidgetForumPostListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetReactionsList") {
+            patcher.after<WidgetReactionsList>(
+                "onViewCreated", View::class.java, Bundle::class.java
+            ) {
+                val view = it[0] as? ViewGroup ?: return@after
+                hideAllDraweeViews(view)
+            }
+        }
+
+        tryPatch("ReactionsBottomSheet") {
+            patcher.after<ReactionsBottomSheet>(
+                "onViewCreated", View::class.java, Bundle::class.java
+            ) {
+                val view = it[0] as? ViewGroup ?: return@after
+                hideAllDraweeViews(view)
+            }
+        }
+
+        tryPatch("WidgetHomeHeaderManager") {
+            patcher.after<WidgetHomeHeaderManager>(
+                "onViewBound", View::class.java
+            ) {
+                val view = it[0] as? ViewGroup ?: return@after
+                hideAllDraweeViews(view)
+            }
+        }
+
+        tryPatch("UserProfileHeaderView") {
+            patcher.after<UserProfileHeaderView>(
+                "updateAvatar", String::class.java, Boolean::class.java
+            ) {
+                (this as? ViewGroup)?.let { vg -> hideAllDraweeViews(vg) }
+            }
+        }
+
+        tryPatch("WidgetUserSheet") {
+            patcher.after<WidgetUserSheet>(
+                "onViewCreated", View::class.java, Bundle::class.java
+            ) {
+                val view = it[0] as? ViewGroup ?: return@after
+                hideAllDraweeViews(view)
+            }
+        }
+
+        tryPatch("WidgetChatListAdapterItemMember") {
+            patcher.after<WidgetChatListAdapterItemMember>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetFriendsListItem") {
+            patcher.after<WidgetFriendsListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetFriendsListAdapter") {
+            patcher.after<WidgetFriendsListAdapter>(
+                "onBindViewHolder",
+                RecyclerView.ViewHolder::class.java,
+                Int::class.java
+            ) {
+                val holder = it[0] as? RecyclerView.ViewHolder ?: return@after
+                val root = holder.itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("PrivateChannelListItem") {
+            patcher.after<PrivateChannelListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetChannelListItemVoiceUser") {
+            patcher.after<WidgetChannelListItemVoiceUser>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetVoiceFullscreenParticipant") {
+            patcher.after<WidgetVoiceFullscreenParticipant>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetGuildListItem") {
+            patcher.after<WidgetGuildListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetSearchResultsListItem") {
+            patcher.after<WidgetSearchResultsListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetSearchResultsAdapter") {
+            patcher.after<WidgetSearchResultsAdapter>(
+                "onBindViewHolder",
+                RecyclerView.ViewHolder::class.java,
+                Int::class.java
+            ) {
+                val holder = it[0] as? RecyclerView.ViewHolder ?: return@after
+                val root = holder.itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("MentionSuggestionItem") {
+            patcher.after<MentionSuggestionItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetChatInputAutocompleteAdapter") {
+            patcher.after<WidgetChatInputAutocompleteAdapter>(
+                "onBindViewHolder",
+                RecyclerView.ViewHolder::class.java,
+                Int::class.java
+            ) {
+                val holder = it[0] as? RecyclerView.ViewHolder ?: return@after
+                val root = holder.itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("StageParticipantListItem") {
+            patcher.after<StageParticipantListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetInviteInviter") {
+            patcher.after<WidgetInviteInviter>(
+                "onViewCreated", View::class.java, Bundle::class.java
+            ) {
+                val view = it[0] as? ViewGroup ?: return@after
+                hideAllDraweeViews(view)
+            }
+        }
+
+        tryPatch("WidgetAuditLogItem") {
+            patcher.after<WidgetAuditLogItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
+        }
+
+        tryPatch("WidgetNotificationListItem") {
+            patcher.after<WidgetNotificationListItem>(
+                "onConfigure", Int::class.java, Any::class.java
+            ) {
+                val root = itemView as? ViewGroup ?: return@after
+                hideAllDraweeViews(root)
+            }
         }
     }
 
-    override fun stop(context: Context) {
-        // Remove all patches
-        patcher.unpatchAll()
+    override fun stop() = patcher.unpatchAll()
+
+    private fun tryPatch(name: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: ClassNotFoundException) {
+            logger.warn("HideAvatars: skipping $name — class not found in this build")
+        } catch (e: NoSuchMethodException) {
+            logger.warn("HideAvatars: skipping $name — method not found in this build")
+        } catch (e: Exception) {
+            logger.error("HideAvatars: unexpected error patching $name", e)
+        }
+    }
+
+    private fun hideAllDraweeViews(root: ViewGroup) {
+        for (i in 0 until root.childCount) {
+            when (val child = root.getChildAt(i)) {
+                is SimpleDraweeView -> child.visibility = View.INVISIBLE
+                is ViewGroup        -> hideAllDraweeViews(child)
+            }
+        }
     }
 }

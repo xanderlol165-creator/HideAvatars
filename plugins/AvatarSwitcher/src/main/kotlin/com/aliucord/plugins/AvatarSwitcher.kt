@@ -24,7 +24,7 @@ class AvatarSwitcher : Plugin() {
             "Switch between your two avatars"
         ) { _ ->
             try {
-                val token = StoreStream.getAuthentication().authToken
+                val token = StoreStream.getAuthentication().GetAuthToken
                 val avatarData = if (useAvatar1) avatar1 else avatar2
                 val avatarNumber = if (useAvatar1) 1 else 2
 

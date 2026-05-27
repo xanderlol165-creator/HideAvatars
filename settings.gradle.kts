@@ -32,3 +32,5 @@ rootDir.resolve("plugins")
     .forEach { include(":plugins:${it.name}") }
 
 project(":plugins:MyFirstKotlinPlugin").name = "HideAvatarsToggle"
+project(":plugins:MyFirstKotlinPlugin").name = "HideAvatarsToggle"
+project(":plugins:AvatarSwitcher").name = "AvatarSwitcher"

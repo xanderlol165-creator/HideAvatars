@@ -26,10 +26,9 @@ dependencyResolutionManagement {
 rootProject.name = "aliucord-plugins"
 include(":plugins")
 
-// Add each directory under ./plugins as a separate project
-rootDir.resolve("plugins")
-    .listFiles { file -> file.isDirectory && file.resolve("build.gradle.kts").exists() }!!
-    .forEach { include(":plugins:${it.name}") }
-
+// 1. Manually include the first plugin and rename it
+include(":plugins:MyFirstKotlinPlugin")
 project(":plugins:MyFirstKotlinPlugin").name = "HideAvatarsToggle"
-project(":plugins:AvatarSwitcher").name = "AvatarSwitcher"
+
+// 2. Manually include the Avatar Switcher
+include(":plugins:AvatarSwitcher")

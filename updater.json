@@ -1,0 +1,1 @@
+{"MyFirstKotlinPlugin":{"version":"1.0.0","build":"https://cdn.jsdelivr.net/gh/Aliucord/plugins-template@refs/heads/builds/MyFirstKotlinPlugin.zip","buildCrc32":"AE3EF0A3","changelog":"# 1.0.0\n* Initial plugin release!","minimumDiscordVersion":126021,"minimumAliucordVersion":"2.7.0","minimumKotlinVersion":"1.5.21","minimumApiLevel":21}}

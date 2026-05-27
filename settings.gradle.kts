@@ -30,3 +30,5 @@ include(":plugins")
 rootDir.resolve("plugins")
     .listFiles { file -> file.isDirectory && file.resolve("build.gradle.kts").exists() }!!
     .forEach { include(":plugins:${it.name}") }
+
+project(":plugins:MyFirstKotlinPlugin").name = "HideAvatarsToggle"

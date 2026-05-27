@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.aliucord.Utils
 import com.aliucord.annotations.AliucordPlugin
 import com.aliucord.api.SettingsAPI
+import com.aliucord.api.CommandsAPI.CommandResult
 import com.aliucord.entities.Plugin
 import com.aliucord.patcher.after
 import com.aliucord.widgets.BottomSheet
@@ -29,6 +30,16 @@ class HideAvatars : Plugin() {
     }
 
     override fun start(context: Context) {
+        
+        // This registers your custom slash command!
+        commands.registerCommand("avatars", "Instantly toggle avatars on or off") {
+            val currentState = settings.getBool("hide_avatars_toggle", true)
+            val newState = !currentState
+            settings.setBool("hide_avatars_toggle", newState)
+            
+            val status = if (newState) "HIDDEN" else "VISIBLE"
+            CommandResult("Avatars are now $status! (Swipe to another channel and back to refresh)", null, false)
+        }
         
         tryPatch("WidgetChatListAdapterItemMessage") {
             patcher.after<WidgetChatListAdapterItemMessage>(
@@ -93,7 +104,10 @@ class HideAvatars : Plugin() {
         }
     }
 
-    override fun stop(context: Context) = patcher.unpatchAll()
+    override fun stop(context: Context) {
+        patcher.unpatchAll()
+        commands.unregisterAll()
+    }
 
     private fun tryPatch(name: String, block: () -> Unit) {
         try {

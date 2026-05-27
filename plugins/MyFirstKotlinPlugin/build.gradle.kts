@@ -1,26 +1,16 @@
-version = "1.0.0" // Plugin version. Increment this to trigger an update
-description = "My first Kotlin plugin!" // Plugin description that will be shown to user
+version = "1.0.0" 
+description = "Instantly toggle all avatars on and off." 
 
 aliucord {
-    // Changelog of your plugin
+    // This line forces the app to show your name instead of 'yournamehere'
+    author("Xander") 
+
     changelog.set(
         """
         # 1.0.0
-        * Initial plugin release!
+        * Added a toggle switch to hide all avatars!
         """.trimIndent(),
     )
-    // Image or Gif that will be shown at the top of your changelog page
-    // changelogMedia.set("https://cool.png")
-
-    // Add additional authors to this plugin
-    // author("Name", 0L, hyperlink = true)
-    // author("Name", 0L, hyperlink = true)
-
-    // Excludes this plugin from publishing and global plugin repositories.
-    // Set this to false if the plugin is unfinished
+    
     deploy.set(true)
-
-    // Builds and deploys this plugin but excludes it from global plugin repositories.
-    // Set this if the plugin has reached EOL but a last update should still occur.
-    // deployHidden.set(true)
 }

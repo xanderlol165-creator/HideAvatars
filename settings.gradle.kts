@@ -32,3 +32,4 @@ project(":plugins:MyFirstKotlinPlugin").name = "HideAvatarsToggle"
 
 // 2. Manually include the Avatar Switcher
 include(":plugins:AvatarSwitcher")
+include(":plugins:DebateClip")

@@ -1,53 +1,21 @@
+
 package com.debateclip
 
-/**
- * Fast, offline, keyword-based fallacy flagger.
- * These are heuristics: they flag *candidate* fallacies by surface patterns.
- * The LLM analysis is the authoritative judgment; this counter works with no API key.
- */
+import java.util.regex.Pattern
+
 object FallacyDetector {
 
     private val patterns: List<Pair<String, Regex>> = listOf(
-        "Ad hominem" to Regex(
-            "\\b(idiot|stupid|moron|dumbass|dumb|clown|braindead|pathetic|you people|typical of (you|them))\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Strawman" to Regex(
-            "\\bso (you're|you are|what you're) (saying|basically saying)|\\byou basically (want|think)\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Whataboutism (tu quoque)" to Regex(
-            "\\b(but )?what about\\b|\\byou (do|did) it too\\b|\\byou're one to talk\\b|\\bhypocrite\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Appeal to authority" to Regex(
-            "\\b(experts|scientists|doctors|studies) (say|show|agree|prove)\\b|\\bit'?s (a )?(well[- ]known|proven) fact\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Appeal to popularity" to Regex(
-            "\\beveryone (knows|agrees|thinks)\\b|\\bmost people (agree|think|know)\\b|\\bnobody (believes|thinks) that\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Slippery slope" to Regex(
-            "\\bnext thing (you know)?\\b|\\bbefore you know it\\b|\\bwhere does it end\\b|\\bslippery slope\\b|\\bit will (inevitably )?lead to\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "False dilemma" to Regex(
-            "\\byou'?re either\\b|\\beither .{1,40} or (else)?\\b|\\bonly two (options|choices)\\b|\\bthere'?s no middle ground\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Hasty generalization" to Regex(
-            "\\ball (of (them|you)|men|women|people|\\w+s) (are|do|think)\\b|\\b(always|never) (does|do|works|happens)\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Appeal to emotion" to Regex(
-            "\\bthink of the children\\b|\\bhow dare you\\b|\\byou should be ashamed\\b",
-            RegexOption.IGNORE_CASE
-        ),
-        "Appeal to ignorance" to Regex(
-            "\\bno one has (ever )?proven\\b|\\byou can'?t prove\\b|\\bthere'?s no evidence against\\b",
-            RegexOption.IGNORE_CASE
-        )
+        "Ad hominem" to Pattern.compile("\\b(idiot|stupid|moron|dumbass|dumb|clown|braindead|pathetic|you people|typical of (you|them))\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Strawman" to Pattern.compile("\\bso (you're|you are|what you're) (saying|basically saying)|\\byou basically (want|think)\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Whataboutism (tu quoque)" to Pattern.compile("\\b(but )?what about\\b|\\byou (do|did) it too\\b|\\byou're one to talk\\b|\\bhypocrite\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Appeal to authority" to Pattern.compile("\\b(experts|scientists|doctors|studies) (say|show|agree|prove)\\b|\\bit'?s (a )?(well[- ]known|proven) fact\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Appeal to popularity" to Pattern.compile("\\beveryone (knows|agrees|thinks)\\b|\\bmost people (agree|think|know)\\b|\\bnobody (believes|thinks) that\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Slippery slope" to Pattern.compile("\\bnext thing (you know)?\\b|\\bbefore you know it\\b|\\bwhere does it end\\b|\\bslippery slope\\b|\\bit will (inevitably )?lead to\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "False dilemma" to Pattern.compile("\\byou'?re either\\b|\\beither .{1,40} or (else)?\\b|\\bonly two (options|choices)\\b|\\bthere'?s no middle ground\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Hasty generalization" to Pattern.compile("\\ball (of (them|you)|men|women|people|\\w+s) (are|do|think)\\b|\\b(always|never) (does|do|works|happens)\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Appeal to emotion" to Pattern.compile("\\bthink of the children\\b|\\bhow dare you\\b|\\byou should be ashamed\\b", Pattern.CASE_INSENSITIVE).toRegex(),
+        "Appeal to ignorance" to Pattern.compile("\\bno one has (ever )?proven\\b|\\byou can'?t prove\\b|\\bthere'?s no evidence against\\b", Pattern.CASE_INSENSITIVE).toRegex()
     )
 
     private data class Flag(val fallacy: String, val example: String)
@@ -76,4 +44,3 @@ object FallacyDetector {
         return sb.toString().trimEnd()
     }
 }
-

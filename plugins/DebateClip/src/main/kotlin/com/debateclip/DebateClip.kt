@@ -193,6 +193,7 @@ class DebateClip : Plugin() {
         }
     }
 
+    // FIXED: Bypasses Kotlin Iterable to avoid IntIterator cast crash on obfuscated Discord collections
     private fun collectLines(): List<Line> {
         var start = DebateState.startId
         var end = DebateState.endId
@@ -208,9 +209,47 @@ class DebateClip : Plugin() {
                 .getChannelMessages(DebateState.channelId, null, after, 100)
                 .await()
             if (err != null) throw RuntimeException("Failed to fetch messages: ${err.message}")
-            if (batch == null || batch.isEmpty()) break
+            if (batch == null) break
 
-            val models = batch.map { Message(it) }.sortedBy { it.id }
+            // FIX: Use reflection to safely iterate obfuscated collection (d0.d0.b)
+            // The batch object does NOT implement kotlin.collections.Iterable, so .map() crashes.
+            val models = ArrayList<Message>()
+
+            try {
+                // Try Java iterator() method via reflection
+                val iteratorMethod = batch.javaClass.getMethod("iterator")
+                val rawIterator = iteratorMethod.invoke(batch) as java.util.Iterator<*>
+
+                while (rawIterator.hasNext()) {
+                    val item = rawIterator.next() ?: continue
+                    @Suppress("UNCHECKED_CAST")
+                    val map = item as? Map<String, Any>
+                    if (map != null) {
+                        models.add(Message(map))
+                    }
+                }
+            } catch (e: NoSuchMethodException) {
+                // Fallback: try List-like size() + get(int)
+                try {
+                    val sizeMethod = batch.javaClass.getMethod("size")
+                    val getMethod = batch.javaClass.getMethod("get", Int::class.java)
+                    val size = sizeMethod.invoke(batch) as Int
+
+                    for (i in 0 until size) {
+                        val item = getMethod.invoke(batch, i) ?: continue
+                        @Suppress("UNCHECKED_CAST")
+                        val map = item as? Map<String, Any>
+                        if (map != null) {
+                            models.add(Message(map))
+                        }
+                    }
+                } catch (e2: Throwable) {
+                    throw RuntimeException("Cannot iterate over obfuscated batch type: ${batch.javaClass.name}")
+                }
+            }
+
+            models.sortBy { it.id }
+
             for (m in models) {
                 if (m.id !in start..end) continue
                 val a = m.author ?: continue
@@ -219,6 +258,8 @@ class DebateClip : Plugin() {
                 val content = m.content?.takeIf { it.isNotBlank() } ?: "[non-text message]"
                 out.add(Line(m.id, user.username, content))
             }
+
+            if (models.isEmpty()) break
             after = models.last().id
             if (after >= end || models.size < 100) break
         }

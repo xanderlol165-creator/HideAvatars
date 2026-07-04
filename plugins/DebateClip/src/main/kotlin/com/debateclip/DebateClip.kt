@@ -193,7 +193,8 @@ class DebateClip : Plugin() {
         }
     }
 
-    // FIXED: Bypasses Kotlin Iterable to avoid IntIterator cast crash on obfuscated Discord collections
+    // FIXED: Uses raw Java reflection to iterate the obfuscated collection.
+    // The batch object does NOT implement kotlin.collections.Iterable, so .map() crashes with IntIterator cast.
     private fun collectLines(): List<Line> {
         var start = DebateState.startId
         var end = DebateState.endId
@@ -211,22 +212,21 @@ class DebateClip : Plugin() {
             if (err != null) throw RuntimeException("Failed to fetch messages: ${err.message}")
             if (batch == null) break
 
-            // FIX: Use reflection to safely iterate obfuscated collection (d0.d0.b)
-            // The batch object does NOT implement kotlin.collections.Iterable, so .map() crashes.
+            // The batch is an obfuscated Discord collection (e.g. d0.d0.b).
+            // It does NOT implement kotlin.collections.Iterable.
+            // We use Java reflection to call iterator() directly, bypassing Kotlin's type system.
             val models = ArrayList<Message>()
 
             try {
-                // Try Java iterator() method via reflection
                 val iteratorMethod = batch.javaClass.getMethod("iterator")
                 val rawIterator = iteratorMethod.invoke(batch) as java.util.Iterator<*>
 
                 while (rawIterator.hasNext()) {
                     val item = rawIterator.next() ?: continue
+                    // The items ARE Message objects (or obfuscated subclasses).
+                    // We cast them directly; do NOT call Message(item) constructor.
                     @Suppress("UNCHECKED_CAST")
-                    val map = item as? Map<String, Any>
-                    if (map != null) {
-                        models.add(Message(map))
-                    }
+                    models.add(item as Message)
                 }
             } catch (e: NoSuchMethodException) {
                 // Fallback: try List-like size() + get(int)
@@ -238,10 +238,7 @@ class DebateClip : Plugin() {
                     for (i in 0 until size) {
                         val item = getMethod.invoke(batch, i) ?: continue
                         @Suppress("UNCHECKED_CAST")
-                        val map = item as? Map<String, Any>
-                        if (map != null) {
-                            models.add(Message(map))
-                        }
+                        models.add(item as Message)
                     }
                 } catch (e2: Throwable) {
                     throw RuntimeException("Cannot iterate over obfuscated batch type: ${batch.javaClass.name}")
@@ -300,3 +297,4 @@ class DebateClip : Plugin() {
         }
     }
 }
+

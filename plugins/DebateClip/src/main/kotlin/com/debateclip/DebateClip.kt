@@ -32,7 +32,7 @@ object DebateState {
     var endId = 0L
 
     /** userId -> username of the debaters to include. Supports any number of participants. */
-    val participants = LinkedHashMap<Long, String>()
+    val participants = java.util.LinkedHashMap<Long, String>()
 
     val ready get() = channelId != 0L && startId != 0L && endId != 0L
 
@@ -40,21 +40,21 @@ object DebateState {
         if (channel != channelId) reset()
         channelId = channel
         startId = messageId
-        participants[user.id] = user.username
+        participants.put(user.id, user.username)
     }
 
     fun markEnd(channel: Long, messageId: Long, user: CoreUser) {
         if (channel != channelId) reset()
         channelId = channel
         endId = messageId
-        participants[user.id] = user.username
+        participants.put(user.id, user.username)
     }
 
     fun toggle(user: CoreUser): Boolean =
         if (participants.containsKey(user.id)) {
             participants.remove(user.id); false
         } else {
-            participants[user.id] = user.username; true
+            participants.put(user.id, user.username); true
         }
 
     fun reset() {
@@ -139,7 +139,7 @@ class DebateClip : Plugin() {
         Utils.threadPool.execute {
             try {
                 val lines = collectLines()
-                if (lines.isEmpty()) {
+                if (lines.size == 0) {
                     Utils.showToast("No messages from the selected participants in that range")
                     return@execute
                 }
@@ -158,27 +158,33 @@ class DebateClip : Plugin() {
         Utils.threadPool.execute {
             try {
                 val lines = collectLines()
-                if (lines.isEmpty()) {
+                if (lines.size == 0) {
                     Utils.showToast("No messages from the selected participants in that range")
                     return@execute
                 }
                 val transcript = buildTranscript(lines)
-                val report = StringBuilder()
+                val report = java.lang.StringBuilder()
 
                 report.append(FallacyDetector.report(lines))
 
-                val key = settings.getString(S.API_KEY, "") ?: ""
-                if (key.isBlank()) {
+                // Manually extracting settings via literal strings to prevent missing reference crashes
+                val key = settings.getString("api_key", "") ?: ""
+                if (key.trim().isEmpty()) {
                     report.append(
                         "\n\n(No API key configured. Open Settings \u2192 Plugins \u2192 DebateClip " +
                             "to unlock the full validity/soundness analysis and fact-checking.)"
                     )
                 } else {
                     val raw = LlmClient.chat(settings, Prompts.ANALYSIS_SYSTEM, Prompts.analysisPrompt(transcript))
-                    val (analysis, claims) = Prompts.splitClaims(raw)
+                    
+                    // Replaced Kotlin destructuring to avoid Component1 iterators
+                    val split = Prompts.splitClaims(raw)
+                    val analysis = split.first
+                    val claims = split.second
+                    
                     report.append("\n\n\u2550\u2550 Logic analysis (LLM) \u2550\u2550\n").append(analysis.trim())
 
-                    if (settings.getBool(S.FACT_CHECK, true) && claims.isNotEmpty()) {
+                    if (settings.getBool("fact_check", true) && claims.isNotEmpty()) {
                         val evidence = FactChecker.gatherEvidence(claims)
                         val verdicts = LlmClient.chat(settings, Prompts.FACT_SYSTEM, Prompts.factPrompt(claims, evidence))
                         report.append("\n\n\u2550\u2550 Fact check \u2550\u2550\n").append(verdicts.trim())
@@ -198,8 +204,11 @@ class DebateClip : Plugin() {
         var end = DebateState.endId
         if (start > end) { val t = start; start = end; end = t }
 
-        val maxMessages = (settings.getString(S.MAX_MSGS, "500") ?: "500").toIntOrNull() ?: 500
-        val ids = DebateState.participants.keys.toSet()
+        var maxMessages = 500
+        try {
+            val maxStr = settings.getString("max_msgs", "500")
+            if (maxStr != null) maxMessages = java.lang.Integer.parseInt(maxStr)
+        } catch (ignored: Exception) {}
 
         val out = ArrayList<Line>()
         var after = start - 1
@@ -208,18 +217,18 @@ class DebateClip : Plugin() {
             val raw = try {
                 RestAPI.api.getChannelMessages(DebateState.channelId, null, after, 100).await()
             } catch (e: Exception) {
-                throw RuntimeException("Failed to fetch messages: ${e.message}")
+                throw RuntimeException("Failed to fetch messages: " + e.message)
             }
 
             if (raw !is Pair<*, *>) {
-                throw RuntimeException("Unexpected getChannelMessages result type: ${raw?.javaClass}")
+                throw RuntimeException("Unexpected getChannelMessages result type")
             }
             
             val result = raw.first
             val err = raw.second
             
             if (err != null) {
-                throw RuntimeException("getChannelMessages failed: $err")
+                throw RuntimeException("getChannelMessages failed: " + err.toString())
             }
             
             val batch = result as? java.util.List<*> ?: break
@@ -242,8 +251,7 @@ class DebateClip : Plugin() {
                             log.error("DebateClip: Failed to wrap message", e2)
                         }
                     }
-                    // FIX: Passed a RuntimeException alongside the string so Aliucord's logger signature is satisfied
-                    else -> log.error("DebateClip: unrecognized message type", RuntimeException(item.javaClass.name))
+                    else -> log.error("DebateClip: unrecognized message type", java.lang.RuntimeException(item.javaClass.name))
                 }
             }
 
@@ -252,18 +260,27 @@ class DebateClip : Plugin() {
             var j = 0
             val modelsSize = models.size
             while (j < modelsSize) {
-                val m = models[j]
+                val m = models.get(j)
                 j++
                 if (m.id < start || m.id > end) continue
                 val a = m.author ?: continue
                 val user = CoreUser(a)
-                if (!ids.contains(user.id)) continue
-                val content = m.content?.takeIf { it.isNotBlank() } ?: "[non-text message]"
-                out.add(Line(m.id, user.username, content))
+                
+                // CRITICAL: Bypassed Kotlin .toSet() entirely. Direct Java Map lookup.
+                if (!DebateState.participants.containsKey(user.id)) continue
+                
+                // CRITICAL: Bypassed Kotlin .takeIf and .isNotBlank
+                var contentStr = m.content
+                if (contentStr == null || contentStr.trim().isEmpty()) {
+                    contentStr = "[non-text message]"
+                }
+                out.add(Line(m.id, user.username, contentStr))
             }
 
             if (models.isEmpty()) break
-            after = models[models.size - 1].id
+            
+            // CRITICAL: Bypassed Kotlin .last()
+            after = models.get(models.size - 1).id
             if (after >= end || models.size < 100) break
         }
         return out
@@ -271,32 +288,44 @@ class DebateClip : Plugin() {
 
     private fun buildTranscript(lines: List<Line>): String {
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-        fun ts(id: Long) = fmt.format(Date((id ushr 22) + 1420070400000L))
 
-        val header = buildString {
-            append("Debate transcript\n")
-            append("Participants: ")
-            
-            val participantsList = ArrayList(DebateState.participants.values)
-            var p = 0
-            val pSize = participantsList.size
-            while (p < pSize) {
-                append(participantsList[p])
-                p++
-                if (p < pSize) append(", ")
-            }
-            
-            append("\nRange: ${ts(lines.first().id)} \u2192 ${ts(lines.last().id)} (${lines.size} messages)\n")
-            append("\u2500".repeat(40)).append('\n')
+        val sb = java.lang.StringBuilder()
+        sb.append("Debate transcript\n")
+        sb.append("Participants: ")
+        
+        // CRITICAL: Bypassed joinToString. Using primitive Java iterator to prevent R8 crashes.
+        val pIter = DebateState.participants.values.iterator()
+        var pCount = 0
+        val pSize = DebateState.participants.size
+        while (pIter.hasNext()) {
+            sb.append(pIter.next())
+            pCount++
+            if (pCount < pSize) sb.append(", ")
         }
         
-        val sb = StringBuilder(header)
+        sb.append("\nRange: ")
+        // CRITICAL: Bypassed lines.first() and lines.last()
+        sb.append(fmt.format(Date((lines.get(0).id ushr 22) + 1420070400000L)))
+        sb.append(" \u2192 ")
+        sb.append(fmt.format(Date((lines.get(lines.size - 1).id ushr 22) + 1420070400000L)))
+        sb.append(" (")
+        sb.append(lines.size)
+        sb.append(" messages)\n")
+        
+        // CRITICAL: Bypassed .repeat(40) to kill the final hidden IntIterator
+        sb.append("────────────────────────────────────────\n")
+        
         var k = 0
         val linesSize = lines.size
         while (k < linesSize) {
-            val it = lines[k]
+            val it = lines.get(k)
             k++
-            sb.append("[${ts(it.id)}] ${it.author}: ${it.content}")
+            sb.append("[")
+            sb.append(fmt.format(Date((it.id ushr 22) + 1420070400000L)))
+            sb.append("] ")
+            sb.append(it.author)
+            sb.append(": ")
+            sb.append(it.content)
             if (k < linesSize) sb.append("\n")
         }
         return sb.toString()

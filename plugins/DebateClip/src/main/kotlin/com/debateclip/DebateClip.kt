@@ -219,8 +219,9 @@ class DebateClip : Plugin() {
             val result = raw.first
             val err = raw.second
             
-            if (err is Throwable) {
-                throw RuntimeException("getChannelMessages failed: ${err.message}", err)
+            // FIX: Removed the 2-argument constructor so the compiler stops crying about type mismatches
+            if (err != null) {
+                throw RuntimeException("getChannelMessages failed: $err")
             }
             
             // Cast to Java's List explicitly to allow indexing

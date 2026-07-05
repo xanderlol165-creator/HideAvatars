@@ -193,8 +193,6 @@ class DebateClip : Plugin() {
         }
     }
 
-    // FIXED: Uses raw Java reflection to iterate the obfuscated collection.
-    // The batch object does NOT implement kotlin.collections.Iterable, so .map() crashes with IntIterator cast.
     private fun collectLines(): List<Line> {
         var start = DebateState.startId
         var end = DebateState.endId
@@ -212,24 +210,24 @@ class DebateClip : Plugin() {
             if (err != null) throw RuntimeException("Failed to fetch messages: ${err.message}")
             if (batch == null) break
 
-            // The batch is an obfuscated Discord collection (e.g. d0.d0.b).
-            // It does NOT implement kotlin.collections.Iterable.
-            // We use Java reflection to call iterator() directly, bypassing Kotlin's type system.
             val models = ArrayList<Message>()
 
             try {
+                // Safely get the iterator to bypass Kotlin's strict Iterable casting
                 val iteratorMethod = batch.javaClass.getMethod("iterator")
                 val rawIterator = iteratorMethod.invoke(batch) as java.util.Iterator<*>
 
                 while (rawIterator.hasNext()) {
                     val item = rawIterator.next() ?: continue
-                    // The items ARE Message objects (or obfuscated subclasses).
-                    // We cast them directly; do NOT call Message(item) constructor.
-                    @Suppress("UNCHECKED_CAST")
-                    models.add(item as Message)
+                    try {
+                        // FIX: Pass the raw api.Message into the models.Message constructor to wrap it properly
+                        models.add(Message(item as com.discord.api.message.Message))
+                    } catch (e: Exception) {
+                        log.error("Failed to wrap message", e)
+                    }
                 }
             } catch (e: NoSuchMethodException) {
-                // Fallback: try List-like size() + get(int)
+                // Fallback for List-like data structures
                 try {
                     val sizeMethod = batch.javaClass.getMethod("size")
                     val getMethod = batch.javaClass.getMethod("get", Int::class.java)
@@ -237,10 +235,13 @@ class DebateClip : Plugin() {
 
                     for (i in 0 until size) {
                         val item = getMethod.invoke(batch, i) ?: continue
-                        @Suppress("UNCHECKED_CAST")
-                        models.add(item as Message)
+                        try {
+                            models.add(Message(item as com.discord.api.message.Message))
+                        } catch (e2: Exception) {
+                            log.error("Failed to wrap message fallback", e2)
+                        }
                     }
-                } catch (e2: Throwable) {
+                } catch (e3: Throwable) {
                     throw RuntimeException("Cannot iterate over obfuscated batch type: ${batch.javaClass.name}")
                 }
             }
@@ -297,4 +298,3 @@ class DebateClip : Plugin() {
         }
     }
 }
-

@@ -211,7 +211,6 @@ class DebateClip : Plugin() {
                 throw RuntimeException("Failed to fetch messages: ${e.message}")
             }
 
-            // Await returns Pair<Result, Error>. This catches it perfectly.
             if (raw !is Pair<*, *>) {
                 throw RuntimeException("Unexpected getChannelMessages result type: ${raw?.javaClass}")
             }
@@ -219,17 +218,14 @@ class DebateClip : Plugin() {
             val result = raw.first
             val err = raw.second
             
-            // FIX: Removed the 2-argument constructor so the compiler stops crying about type mismatches
             if (err != null) {
                 throw RuntimeException("getChannelMessages failed: $err")
             }
             
-            // Cast to Java's List explicitly to allow indexing
             val batch = result as? java.util.List<*> ?: break
 
             val models = ArrayList<Message>()
             
-            // Primitive indexing loop to bypass R8-stripped Kotlin Iterators completely
             var i = 0
             val size = batch.size
             while (i < size) {
@@ -246,7 +242,8 @@ class DebateClip : Plugin() {
                             log.error("DebateClip: Failed to wrap message", e2)
                         }
                     }
-                    else -> log.error("DebateClip: unrecognized message type ${item.javaClass.name}")
+                    // FIX: Passed a RuntimeException alongside the string so Aliucord's logger signature is satisfied
+                    else -> log.error("DebateClip: unrecognized message type", RuntimeException(item.javaClass.name))
                 }
             }
 
@@ -280,7 +277,6 @@ class DebateClip : Plugin() {
             append("Debate transcript\n")
             append("Participants: ")
             
-            // Primitive array extraction to prevent Kotlin Iterator crashes here too
             val participantsList = ArrayList(DebateState.participants.values)
             var p = 0
             val pSize = participantsList.size

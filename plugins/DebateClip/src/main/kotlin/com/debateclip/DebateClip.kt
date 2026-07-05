@@ -210,39 +210,23 @@ class DebateClip : Plugin() {
             if (err != null) throw RuntimeException("Failed to fetch messages: ${err.message}")
             if (batch == null) break
 
+            // ULTIMATE BYPASS: Convert the obfuscated collection directly to a Java array.
+            // This prevents Kotlin from ever trying to use an IntIterator or standard Iterator.
+            val rawArray = (batch as java.util.Collection<*>).toArray()
             val models = ArrayList<Message>()
 
-            try {
-                // Safely get the iterator to bypass Kotlin's strict Iterable casting
-                val iteratorMethod = batch.javaClass.getMethod("iterator")
-                val rawIterator = iteratorMethod.invoke(batch) as java.util.Iterator<*>
-
-                while (rawIterator.hasNext()) {
-                    val item = rawIterator.next() ?: continue
-                    try {
-                        // FIX: Pass the raw api.Message into the models.Message constructor to wrap it properly
-                        models.add(Message(item as com.discord.api.message.Message))
-                    } catch (e: Exception) {
-                        log.error("Failed to wrap message", e)
-                    }
-                }
-            } catch (e: NoSuchMethodException) {
-                // Fallback for List-like data structures
+            for (item in rawArray) {
+                if (item == null) continue
                 try {
-                    val sizeMethod = batch.javaClass.getMethod("size")
-                    val getMethod = batch.javaClass.getMethod("get", Int::class.java)
-                    val size = sizeMethod.invoke(batch) as Int
-
-                    for (i in 0 until size) {
-                        val item = getMethod.invoke(batch, i) ?: continue
-                        try {
-                            models.add(Message(item as com.discord.api.message.Message))
-                        } catch (e2: Exception) {
-                            log.error("Failed to wrap message fallback", e2)
-                        }
+                    // Try casting directly to the UI model first
+                    models.add(item as Message)
+                } catch (e1: ClassCastException) {
+                    try {
+                        // If it's a raw API message, wrap it in the UI model constructor
+                        models.add(Message(item as com.discord.api.message.Message))
+                    } catch (e2: Exception) {
+                        log.error("DebateClip: Failed to cast or wrap message", e2)
                     }
-                } catch (e3: Throwable) {
-                    throw RuntimeException("Cannot iterate over obfuscated batch type: ${batch.javaClass.name}")
                 }
             }
 

@@ -203,36 +203,50 @@ class DebateClip : Plugin() {
 
         val out = ArrayList<Line>()
         var after = start - 1
-        
+
         while (out.size < maxMessages) {
-            // FIX: Removed invalid destructuring that forced IntIterator casts
-            val batch = try {
+            val raw = try {
                 RestAPI.api.getChannelMessages(DebateState.channelId, null, after, 100).await()
             } catch (e: Exception) {
                 throw RuntimeException("Failed to fetch messages: ${e.message}")
             }
-            if (batch == null) break
+
+            // Await returns Pair<Result, Error>. This catches it perfectly.
+            if (raw !is Pair<*, *>) {
+                throw RuntimeException("Unexpected getChannelMessages result type: ${raw?.javaClass}")
+            }
+            
+            val result = raw.first
+            val err = raw.second
+            
+            if (err is Throwable) {
+                throw RuntimeException("getChannelMessages failed: ${err.message}", err)
+            }
+            
+            // Cast to Java's List explicitly to allow indexing
+            val batch = result as? java.util.List<*> ?: break
 
             val models = ArrayList<Message>()
-
-            try {
-                val iteratorMethod = batch.javaClass.getMethod("iterator")
-                val rawIterator = iteratorMethod.invoke(batch) as java.util.Iterator<*>
-
-                while (rawIterator.hasNext()) {
-                    val item = rawIterator.next() ?: continue
-                    try {
-                        models.add(item as Message)
-                    } catch (e1: ClassCastException) {
+            
+            // Primitive indexing loop to bypass R8-stripped Kotlin Iterators completely
+            var i = 0
+            val size = batch.size
+            while (i < size) {
+                val item = batch.get(i)
+                i++
+                if (item == null) continue
+                
+                when (item) {
+                    is Message -> models.add(item)
+                    is com.discord.api.message.Message -> {
                         try {
-                            models.add(Message(item as com.discord.api.message.Message))
+                            models.add(Message(item))
                         } catch (e2: Exception) {
                             log.error("DebateClip: Failed to wrap message", e2)
                         }
                     }
+                    else -> log.error("DebateClip: unrecognized message type ${item.javaClass.name}")
                 }
-            } catch (fatal: Exception) {
-                throw RuntimeException("Reflection iterator failed: ${fatal.message}")
             }
 
             java.util.Collections.sort(models, java.util.Comparator { m1, m2 -> m1.id.compareTo(m2.id) })
@@ -263,11 +277,32 @@ class DebateClip : Plugin() {
 
         val header = buildString {
             append("Debate transcript\n")
-            append("Participants: ${DebateState.participants.values.joinToString(", ")}\n")
-            append("Range: ${ts(lines.first().id)} \u2192 ${ts(lines.last().id)} (${lines.size} messages)\n")
+            append("Participants: ")
+            
+            // Primitive array extraction to prevent Kotlin Iterator crashes here too
+            val participantsList = ArrayList(DebateState.participants.values)
+            var p = 0
+            val pSize = participantsList.size
+            while (p < pSize) {
+                append(participantsList[p])
+                p++
+                if (p < pSize) append(", ")
+            }
+            
+            append("\nRange: ${ts(lines.first().id)} \u2192 ${ts(lines.last().id)} (${lines.size} messages)\n")
             append("\u2500".repeat(40)).append('\n')
         }
-        return header + lines.joinToString("\n") { "[${ts(it.id)}] ${it.author}: ${it.content}" }
+        
+        val sb = StringBuilder(header)
+        var k = 0
+        val linesSize = lines.size
+        while (k < linesSize) {
+            val it = lines[k]
+            k++
+            sb.append("[${ts(it.id)}] ${it.author}: ${it.content}")
+            if (k < linesSize) sb.append("\n")
+        }
+        return sb.toString()
     }
 
     private fun showTextDialog(title: String, body: String) {

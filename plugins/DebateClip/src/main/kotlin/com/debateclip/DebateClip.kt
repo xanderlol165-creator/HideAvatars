@@ -203,6 +203,7 @@ class DebateClip : Plugin() {
 
         val out = ArrayList<Line>()
         var after = start - 1
+        
         while (out.size < maxMessages) {
             val (batch, err) = RestAPI.api
                 .getChannelMessages(DebateState.channelId, null, after, 100)
@@ -210,39 +211,55 @@ class DebateClip : Plugin() {
             if (err != null) throw RuntimeException("Failed to fetch messages: ${err.message}")
             if (batch == null) break
 
-            // ULTIMATE BYPASS: Convert the obfuscated collection directly to a Java array.
-            // This prevents Kotlin from ever trying to use an IntIterator or standard Iterator.
-            val rawArray = (batch as java.util.Collection<*>).toArray()
             val models = ArrayList<Message>()
 
-            for (item in rawArray) {
-                if (item == null) continue
-                try {
-                    // Try casting directly to the UI model first
-                    models.add(item as Message)
-                } catch (e1: ClassCastException) {
+            try {
+                // ABSOLUTE ZERO-KOTLIN-MAGIC BYPASS
+                // Converts the batch to a raw Java array and iterates using a primitive while-loop.
+                val rawArray = (batch as java.util.Collection<*>).toArray()
+                var i = 0
+                val size = rawArray.size
+                while (i < size) {
+                    val item = rawArray[i]
+                    i++
+                    if (item == null) continue
+                    
                     try {
-                        // If it's a raw API message, wrap it in the UI model constructor
-                        models.add(Message(item as com.discord.api.message.Message))
-                    } catch (e2: Exception) {
-                        log.error("DebateClip: Failed to cast or wrap message", e2)
+                        models.add(item as Message)
+                    } catch (e1: ClassCastException) {
+                        try {
+                            models.add(Message(item as com.discord.api.message.Message))
+                        } catch (e2: Exception) {
+                            log.error("DebateClip: Failed to wrap message", e2)
+                        }
                     }
                 }
+            } catch (fatal: Exception) {
+                throw RuntimeException("Fatal batch processing error: ${fatal.message}")
             }
 
-            models.sortBy { it.id }
+            // Primitive Java sort to bypass Kotlin's sortBy iterators
+            java.util.Collections.sort(models, java.util.Comparator { m1, m2 -> m1.id.compareTo(m2.id) })
 
-            for (m in models) {
-                if (m.id !in start..end) continue
+            // Primitive while-loop to avoid the IntIterator crash on standard for-loops
+            var j = 0
+            val modelsSize = models.size
+            while (j < modelsSize) {
+                val m = models[j]
+                j++
+                // Manually checking bounds to avoid using Kotlin's 'in start..end' range
+                if (m.id < start || m.id > end) continue
                 val a = m.author ?: continue
                 val user = CoreUser(a)
-                if (user.id !in ids) continue
+                if (!ids.contains(user.id)) continue
                 val content = m.content?.takeIf { it.isNotBlank() } ?: "[non-text message]"
                 out.add(Line(m.id, user.username, content))
             }
 
             if (models.isEmpty()) break
-            after = models.last().id
+            
+            // Extracting last ID without Kotlin's .last()
+            after = models[models.size - 1].id
             if (after >= end || models.size < 100) break
         }
         return out

@@ -205,25 +205,22 @@ class DebateClip : Plugin() {
         var after = start - 1
         
         while (out.size < maxMessages) {
-            val (batch, err) = RestAPI.api
-                .getChannelMessages(DebateState.channelId, null, after, 100)
-                .await()
-            if (err != null) throw RuntimeException("Failed to fetch messages: ${err.message}")
+            // FIX: Removed invalid destructuring that forced IntIterator casts
+            val batch = try {
+                RestAPI.api.getChannelMessages(DebateState.channelId, null, after, 100).await()
+            } catch (e: Exception) {
+                throw RuntimeException("Failed to fetch messages: ${e.message}")
+            }
             if (batch == null) break
 
             val models = ArrayList<Message>()
 
             try {
-                // ABSOLUTE ZERO-KOTLIN-MAGIC BYPASS
-                // Converts the batch to a raw Java array and iterates using a primitive while-loop.
-                val rawArray = (batch as java.util.Collection<*>).toArray()
-                var i = 0
-                val size = rawArray.size
-                while (i < size) {
-                    val item = rawArray[i]
-                    i++
-                    if (item == null) continue
-                    
+                val iteratorMethod = batch.javaClass.getMethod("iterator")
+                val rawIterator = iteratorMethod.invoke(batch) as java.util.Iterator<*>
+
+                while (rawIterator.hasNext()) {
+                    val item = rawIterator.next() ?: continue
                     try {
                         models.add(item as Message)
                     } catch (e1: ClassCastException) {
@@ -235,19 +232,16 @@ class DebateClip : Plugin() {
                     }
                 }
             } catch (fatal: Exception) {
-                throw RuntimeException("Fatal batch processing error: ${fatal.message}")
+                throw RuntimeException("Reflection iterator failed: ${fatal.message}")
             }
 
-            // Primitive Java sort to bypass Kotlin's sortBy iterators
             java.util.Collections.sort(models, java.util.Comparator { m1, m2 -> m1.id.compareTo(m2.id) })
 
-            // Primitive while-loop to avoid the IntIterator crash on standard for-loops
             var j = 0
             val modelsSize = models.size
             while (j < modelsSize) {
                 val m = models[j]
                 j++
-                // Manually checking bounds to avoid using Kotlin's 'in start..end' range
                 if (m.id < start || m.id > end) continue
                 val a = m.author ?: continue
                 val user = CoreUser(a)
@@ -257,8 +251,6 @@ class DebateClip : Plugin() {
             }
 
             if (models.isEmpty()) break
-            
-            // Extracting last ID without Kotlin's .last()
             after = models[models.size - 1].id
             if (after >= end || models.size < 100) break
         }

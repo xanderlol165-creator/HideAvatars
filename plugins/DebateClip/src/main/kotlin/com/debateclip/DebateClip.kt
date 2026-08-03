@@ -162,7 +162,10 @@ class DebateClip : Plugin() {
 
                 report.append(FallacyDetector.report(lines))
 
-                val key = settings.getString("api_key", "") ?: ""
+                // Check both "apiKey" (from S.API_KEY) and "api_key" fallback
+                var key = settings.getString("apiKey", "") ?: ""
+                if (key.trim().isEmpty()) key = settings.getString("api_key", "") ?: ""
+
                 if (key.trim().isEmpty()) {
                     report.append(
                         "\n\n(No API key configured. Open Settings \u2192 Plugins \u2192 DebateClip " +
@@ -177,7 +180,7 @@ class DebateClip : Plugin() {
                     
                     report.append("\n\n\u2550\u2550 Logic analysis (LLM) \u2550\u2550\n").append(analysis.trim())
 
-                    if (settings.getBool("fact_check", true) && claims.isNotEmpty()) {
+                    if (settings.getBool("factCheck", true) && claims.isNotEmpty()) {
                         val evidence = FactChecker.gatherEvidence(claims)
                         val verdicts = LlmClient.chat(settings, Prompts.FACT_SYSTEM, Prompts.factPrompt(claims, evidence))
                         report.append("\n\n\u2550\u2550 Fact check \u2550\u2550\n").append(verdicts.trim())
@@ -199,7 +202,7 @@ class DebateClip : Plugin() {
 
         var maxMessages = 500
         try {
-            val maxStr = settings.getString("max_msgs", "500")
+            val maxStr = settings.getString("maxMessages", "500") ?: settings.getString("max_msgs", "500")
             if (maxStr != null) maxMessages = java.lang.Integer.parseInt(maxStr)
         } catch (ignored: Exception) {}
 

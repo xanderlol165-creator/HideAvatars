@@ -22,18 +22,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** One line of the debate transcript. */
-data class Line(val id: Long, val author: String, val content: String)
+data class Line(val id: Long, val author: String, val content: String, val replyToId: Long)
 
-/** Current debate selection. Lives as long as the Discord process. */
 object DebateState {
     var channelId = 0L
     var startId = 0L
     var endId = 0L
-
-    /** userId -> username of the debaters to include. Supports any number of participants. */
     val participants = java.util.LinkedHashMap<Long, String>()
-
     val ready get() = channelId != 0L && startId != 0L && endId != 0L
 
     fun markStart(channel: Long, messageId: Long, user: CoreUser) {
@@ -167,7 +162,6 @@ class DebateClip : Plugin() {
 
                 report.append(FallacyDetector.report(lines))
 
-                // Manually extracting settings via literal strings to prevent missing reference crashes
                 val key = settings.getString("api_key", "") ?: ""
                 if (key.trim().isEmpty()) {
                     report.append(
@@ -177,7 +171,6 @@ class DebateClip : Plugin() {
                 } else {
                     val raw = LlmClient.chat(settings, Prompts.ANALYSIS_SYSTEM, Prompts.analysisPrompt(transcript))
                     
-                    // Replaced Kotlin destructuring to avoid Component1 iterators
                     val split = Prompts.splitClaims(raw)
                     val analysis = split.first
                     val claims = split.second
@@ -232,7 +225,6 @@ class DebateClip : Plugin() {
             }
             
             val batch = result as? java.util.List<*> ?: break
-
             val models = ArrayList<Message>()
             
             var i = 0
@@ -266,20 +258,26 @@ class DebateClip : Plugin() {
                 val a = m.author ?: continue
                 val user = CoreUser(a)
                 
-                // CRITICAL: Bypassed Kotlin .toSet() entirely. Direct Java Map lookup.
                 if (!DebateState.participants.containsKey(user.id)) continue
                 
-                // CRITICAL: Bypassed Kotlin .takeIf and .isNotBlank
                 var contentStr = m.content
                 if (contentStr == null || contentStr.trim().isEmpty()) {
                     contentStr = "[non-text message]"
                 }
-                out.add(Line(m.id, user.username, contentStr))
+
+                var replyId = 0L
+                try {
+                    val ref = m.referencedMessage
+                    if (ref != null) {
+                        replyId = ref.id
+                    }
+                } catch (ignored: Exception) {}
+
+                out.add(Line(m.id, user.username, contentStr, replyId))
             }
 
             if (models.isEmpty()) break
             
-            // CRITICAL: Bypassed Kotlin .last()
             after = models.get(models.size - 1).id
             if (after >= end || models.size < 100) break
         }
@@ -293,7 +291,6 @@ class DebateClip : Plugin() {
         sb.append("Debate transcript\n")
         sb.append("Participants: ")
         
-        // CRITICAL: Bypassed joinToString. Using primitive Java iterator to prevent R8 crashes.
         val pIter = DebateState.participants.values.iterator()
         var pCount = 0
         val pSize = DebateState.participants.size
@@ -304,23 +301,37 @@ class DebateClip : Plugin() {
         }
         
         sb.append("\nRange: ")
-        // CRITICAL: Bypassed lines.first() and lines.last()
         sb.append(fmt.format(Date((lines.get(0).id ushr 22) + 1420070400000L)))
         sb.append(" \u2192 ")
         sb.append(fmt.format(Date((lines.get(lines.size - 1).id ushr 22) + 1420070400000L)))
         sb.append(" (")
         sb.append(lines.size)
         sb.append(" messages)\n")
-        
-        // CRITICAL: Bypassed .repeat(40) to kill the final hidden IntIterator
         sb.append("────────────────────────────────────────\n")
         
-        var k = 0
+        val idToNumber = java.util.HashMap<Long, Int>()
+        var idx = 0
         val linesSize = lines.size
+        while (idx < linesSize) {
+            idToNumber.put(lines.get(idx).id, idx + 1)
+            idx++
+        }
+
+        var k = 0
         while (k < linesSize) {
             val it = lines.get(k)
+            val currentNumber = k + 1
             k++
-            sb.append("[")
+            
+            sb.append(currentNumber)
+            
+            if (it.replyToId != 0L && idToNumber.containsKey(it.replyToId)) {
+                sb.append("(To ")
+                sb.append(idToNumber.get(it.replyToId))
+                sb.append(")")
+            }
+            
+            sb.append(" [")
             sb.append(fmt.format(Date((it.id ushr 22) + 1420070400000L)))
             sb.append("] ")
             sb.append(it.author)
@@ -333,22 +344,34 @@ class DebateClip : Plugin() {
 
     private fun showTextDialog(title: String, body: String) {
         Utils.mainThread.post {
-            val act = Utils.appActivity
-            val tv = TextView(act).apply {
-                text = body
-                setTextIsSelectable(true)
-                setPadding(48, 24, 48, 24)
-            }
-            val scroll = ScrollView(act).apply { addView(tv) }
-            AlertDialog.Builder(act)
-                .setTitle(title)
-                .setView(scroll)
-                .setPositiveButton("Copy") { _, _ ->
+            try {
+                val act = Utils.appActivity
+                if (act == null || act.isFinishing || act.isDestroyed) {
                     Utils.setClipboard(title, body)
-                    Utils.showToast("Analysis copied")
+                    Utils.showToast("Analysis complete! (Copied to clipboard)")
+                    return@post
                 }
-                .setNegativeButton("Close", null)
-                .show()
+                
+                val tv = TextView(act).apply {
+                    text = body
+                    setTextIsSelectable(true)
+                    setPadding(48, 24, 48, 24)
+                }
+                val scroll = ScrollView(act).apply { addView(tv) }
+                AlertDialog.Builder(act)
+                    .setTitle(title)
+                    .setView(scroll)
+                    .setPositiveButton("Copy") { _, _ ->
+                        Utils.setClipboard(title, body)
+                        Utils.showToast("Analysis copied")
+                    }
+                    .setNegativeButton("Close", null)
+                    .show()
+            } catch (e: Exception) {
+                log.error("Failed to show dialog", e)
+                Utils.setClipboard(title, body)
+                Utils.showToast("Analysis complete! (Copied to clipboard)")
+            }
         }
     }
 }

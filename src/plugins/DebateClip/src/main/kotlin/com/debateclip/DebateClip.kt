@@ -344,22 +344,34 @@ class DebateClip : Plugin() {
 
     private fun showTextDialog(title: String, body: String) {
         Utils.mainThread.post {
-            val act = Utils.appActivity
-            val tv = TextView(act).apply {
-                text = body
-                setTextIsSelectable(true)
-                setPadding(48, 24, 48, 24)
-            }
-            val scroll = ScrollView(act).apply { addView(tv) }
-            AlertDialog.Builder(act)
-                .setTitle(title)
-                .setView(scroll)
-                .setPositiveButton("Copy") { _, _ ->
+            try {
+                val act = Utils.appActivity
+                if (act == null || act.isFinishing || act.isDestroyed) {
                     Utils.setClipboard(title, body)
-                    Utils.showToast("Analysis copied")
+                    Utils.showToast("Analysis complete! (Copied to clipboard)")
+                    return@post
                 }
-                .setNegativeButton("Close", null)
-                .show()
+                
+                val tv = TextView(act).apply {
+                    text = body
+                    setTextIsSelectable(true)
+                    setPadding(48, 24, 48, 24)
+                }
+                val scroll = ScrollView(act).apply { addView(tv) }
+                AlertDialog.Builder(act)
+                    .setTitle(title)
+                    .setView(scroll)
+                    .setPositiveButton("Copy") { _, _ ->
+                        Utils.setClipboard(title, body)
+                        Utils.showToast("Analysis copied")
+                    }
+                    .setNegativeButton("Close", null)
+                    .show()
+            } catch (e: Exception) {
+                log.error("Failed to show dialog", e)
+                Utils.setClipboard(title, body)
+                Utils.showToast("Analysis complete! (Copied to clipboard)")
+            }
         }
     }
 }

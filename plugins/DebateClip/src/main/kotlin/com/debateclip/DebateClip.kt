@@ -35,21 +35,21 @@ object DebateState {
         if (channel != channelId) reset()
         channelId = channel
         startId = messageId
-        participants.put(user.id, user.username)
+        participants[user.id] = user.username
     }
 
     fun markEnd(channel: Long, messageId: Long, user: CoreUser) {
         if (channel != channelId) reset()
         channelId = channel
         endId = messageId
-        participants.put(user.id, user.username)
+        participants[user.id] = user.username
     }
 
     fun toggle(user: CoreUser): Boolean =
         if (participants.containsKey(user.id)) {
             participants.remove(user.id); false
         } else {
-            participants.put(user.id, user.username); true
+            participants[user.id] = user.username; true
         }
 
     fun reset() {
@@ -80,7 +80,7 @@ class DebateClip : Plugin() {
                 val widget = cf.thisObject as WidgetChatListActions
                 val model = cf.args[0] as WidgetChatListActions.Model
                 val msg = model.message ?: return@Hook
-                val apiAuthor = msg.author ?: return@Hook
+                val apiAuthor = model.message.author ?: return@Hook
                 val root = (widget.view as? NestedScrollView)
                     ?.getChildAt(0) as? LinearLayout ?: return@Hook
                 val ctx = root.context
@@ -134,7 +134,7 @@ class DebateClip : Plugin() {
         Utils.threadPool.execute {
             try {
                 val lines = collectLines()
-                if (lines.size == 0) {
+                if (lines.isEmpty()) {
                     Utils.showToast("No messages from the selected participants in that range")
                     return@execute
                 }
@@ -153,7 +153,7 @@ class DebateClip : Plugin() {
         Utils.threadPool.execute {
             try {
                 val lines = collectLines()
-                if (lines.size == 0) {
+                if (lines.isEmpty()) {
                     Utils.showToast("No messages from the selected participants in that range")
                     return@execute
                 }
@@ -162,7 +162,6 @@ class DebateClip : Plugin() {
 
                 report.append(FallacyDetector.report(lines))
 
-                // Check both "apiKey" (from S.API_KEY) and "api_key" fallback
                 var key = settings.getString("apiKey", "") ?: ""
                 if (key.trim().isEmpty()) key = settings.getString("api_key", "") ?: ""
 
@@ -250,12 +249,12 @@ class DebateClip : Plugin() {
                 }
             }
 
-            java.util.Collections.sort(models, java.util.Comparator { m1, m2 -> m1.id.compareTo(m2.id) })
+            models.sortWith(Comparator { m1, m2 -> m1.id.compareTo(m2.id) })
 
             var j = 0
             val modelsSize = models.size
             while (j < modelsSize) {
-                val m = models.get(j)
+                val m = models[j]
                 j++
                 if (m.id < start || m.id > end) continue
                 val a = m.author ?: continue
@@ -281,7 +280,7 @@ class DebateClip : Plugin() {
 
             if (models.isEmpty()) break
             
-            after = models.get(models.size - 1).id
+            after = models[models.size - 1].id
             if (after >= end || models.size < 100) break
         }
         return out
@@ -304,9 +303,9 @@ class DebateClip : Plugin() {
         }
         
         sb.append("\nRange: ")
-        sb.append(fmt.format(Date((lines.get(0).id ushr 22) + 1420070400000L)))
+        sb.append(fmt.format(Date((lines[0].id ushr 22) + 1420070400000L)))
         sb.append(" \u2192 ")
-        sb.append(fmt.format(Date((lines.get(lines.size - 1).id ushr 22) + 1420070400000L)))
+        sb.append(fmt.format(Date((lines[lines.size - 1].id ushr 22) + 1420070400000L)))
         sb.append(" (")
         sb.append(lines.size)
         sb.append(" messages)\n")
@@ -316,13 +315,13 @@ class DebateClip : Plugin() {
         var idx = 0
         val linesSize = lines.size
         while (idx < linesSize) {
-            idToNumber.put(lines.get(idx).id, idx + 1)
+            idToNumber[lines[idx].id] = idx + 1
             idx++
         }
 
         var k = 0
         while (k < linesSize) {
-            val it = lines.get(k)
+            val it = lines[k]
             val currentNumber = k + 1
             k++
             
@@ -330,7 +329,7 @@ class DebateClip : Plugin() {
             
             if (it.replyToId != 0L && idToNumber.containsKey(it.replyToId)) {
                 sb.append("(To ")
-                sb.append(idToNumber.get(it.replyToId))
+                sb.append(idToNumber[it.replyToId])
                 sb.append(")")
             }
             

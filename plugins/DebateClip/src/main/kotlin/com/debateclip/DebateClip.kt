@@ -80,7 +80,7 @@ class DebateClip : Plugin() {
                 val widget = cf.thisObject as WidgetChatListActions
                 val model = cf.args[0] as WidgetChatListActions.Model
                 val msg = model.message ?: return@Hook
-                val apiAuthor = model.message.author ?: return@Hook
+                val apiAuthor = msg.author ?: return@Hook
                 val root = (widget.view as? NestedScrollView)
                     ?.getChildAt(0) as? LinearLayout ?: return@Hook
                 val ctx = root.context
@@ -97,11 +97,11 @@ class DebateClip : Plugin() {
                 }
 
                 addItem("\uD83D\uDFE2 Debate: mark START here") {
-                    DebateState.markStart(msg.channelId, msg.id, author)
+                    DebateState.markStart(msg.channelId, msg.getId(), author)
                     Utils.showToast("Debate start set (${author.username} added)")
                 }
                 addItem("\uD83D\uDD34 Debate: mark END here") {
-                    DebateState.markEnd(msg.channelId, msg.id, author)
+                    DebateState.markEnd(msg.channelId, msg.getId(), author)
                     Utils.showToast("Debate end set (${author.username} added)")
                 }
                 val inDebate = DebateState.participants.containsKey(author.id)
@@ -249,14 +249,14 @@ class DebateClip : Plugin() {
                 }
             }
 
-            models.sortWith(Comparator { m1, m2 -> m1.id.compareTo(m2.id) })
+            models.sortWith(Comparator { m1, m2 -> m1.getId().compareTo(m2.getId()) })
 
             var j = 0
             val modelsSize = models.size
             while (j < modelsSize) {
                 val m = models[j]
                 j++
-                if (m.id < start || m.id > end) continue
+                if (m.getId() < start || m.getId() > end) continue
                 val a = m.author ?: continue
                 val user = CoreUser(a)
                 
@@ -271,16 +271,16 @@ class DebateClip : Plugin() {
                 try {
                     val ref = m.referencedMessage
                     if (ref != null) {
-                        replyId = ref.id
+                        replyId = ref.getId()
                     }
                 } catch (ignored: Exception) {}
 
-                out.add(Line(m.id, user.username, contentStr, replyId))
+                out.add(Line(m.getId(), user.username, contentStr, replyId))
             }
 
             if (models.isEmpty()) break
             
-            after = models[models.size - 1].id
+            after = models[models.size - 1].getId()
             if (after >= end || models.size < 100) break
         }
         return out

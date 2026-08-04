@@ -97,11 +97,11 @@ class DebateClip : Plugin() {
                 }
 
                 addItem("\uD83D\uDFE2 Debate: mark START here") {
-                    DebateState.markStart(msg.channelId, msg.getId(), author)
+                    DebateState.markStart(msg.channelId, msg.id, author)
                     Utils.showToast("Debate start set (${author.username} added)")
                 }
                 addItem("\uD83D\uDD34 Debate: mark END here") {
-                    DebateState.markEnd(msg.channelId, msg.getId(), author)
+                    DebateState.markEnd(msg.channelId, msg.id, author)
                     Utils.showToast("Debate end set (${author.username} added)")
                 }
                 val inDebate = DebateState.participants.containsKey(author.id)
@@ -249,14 +249,14 @@ class DebateClip : Plugin() {
                 }
             }
 
-            models.sortWith(Comparator { m1, m2 -> m1.getId().compareTo(m2.getId()) })
+            models.sortWith(Comparator { m1, m2 -> m1.id.compareTo(m2.id) })
 
             var j = 0
             val modelsSize = models.size
             while (j < modelsSize) {
                 val m = models[j]
                 j++
-                if (m.getId() < start || m.getId() > end) continue
+                if (m.id < start || m.id > end) continue
                 val a = m.author ?: continue
                 val user = CoreUser(a)
                 
@@ -271,16 +271,17 @@ class DebateClip : Plugin() {
                 try {
                     val ref = m.referencedMessage
                     if (ref != null) {
-                        replyId = ref.getId()
+                        // Wraps the raw API message to expose the public ID safely
+                        replyId = Message(ref).id
                     }
                 } catch (ignored: Exception) {}
 
-                out.add(Line(m.getId(), user.username, contentStr, replyId))
+                out.add(Line(m.id, user.username, contentStr, replyId))
             }
 
             if (models.isEmpty()) break
             
-            after = models[models.size - 1].getId()
+            after = models[models.size - 1].id
             if (after >= end || models.size < 100) break
         }
         return out
